@@ -3,25 +3,40 @@ import networkx as nx
 
 class BPlusTree:
     class Node:
+        """Initialize a new node which can be either a leaf or an internal node.
+            :param is_leaf: A boolean indicating if the node is a leaf node (default False).
+        """
         def __init__(self, is_leaf=False):
             self.is_leaf = is_leaf
             self.keys = []
             self.children = []
 
     class LeafNode(Node):
+        """Initialize a new leaf node, inheriting from Node, with a `next` pointer set to None."""
         def __init__(self):
             super().__init__(True)
             self.next = None
 
     def __init__(self, order):
+        """Create a new empty B+ tree with a given order.
+        :param order: The maximum number of children a node can have.
+        """
         self.root = None
         self.order = order
 
     def build_tree(self, collection, dense=True):
+        """Builds a B+ tree from a collection of values.
+        :param collection: A list of values to insert into the tree.
+        :param dense: A boolean indicating if the tree should be densely packed (default True).
+        """
         for value in collection:
             self.insert(value, dense)
 
     def insert(self, value, dense=True):
+        """Inserts a value into the B+ tree, optionally as a dense tree.
+        :param value: The value to be inserted.
+        :param dense: Specifies whether to use dense mode for node splitting (default True).
+        """
         if not self.root:
             self.root = self.LeafNode()
         
@@ -33,6 +48,11 @@ class BPlusTree:
             self._split(node, dense)
 
     def _find_node(self, node, value):
+        """Finds the appropriate leaf node for a given value.
+        :param node: The node to start the search from.
+        :param value: The value to find the appropriate node for.
+        :return: The leaf node where the value should be inserted.
+        """
         while not node.is_leaf:
             for i, key in enumerate(node.keys):
                 if value < key:
@@ -43,12 +63,21 @@ class BPlusTree:
         return node
 
     def _locate_index(self, keys, value):
+        """Locate the index where the given value should be inserted in the keys list.
+        :param keys: The list of keys in the current node.
+        :param value: The value to insert.
+        :return: The index position where the value should be inserted.
+        """
         for i, key in enumerate(keys):
             if value < key:
                 return i
         return len(keys)
 
     def _split(self, node, dense):
+        """Splits a node into two when it exceeds the order of the tree.
+        :param node: The node to split.
+        :param dense: Determines if the split uses dense packing.
+        """
         mid = self.order // 2 if dense else max(1, len(node.keys) - 1)
         new_node = self.LeafNode() if node.is_leaf else self.Node()
         new_node.keys = node.keys[mid:]
@@ -71,6 +100,11 @@ class BPlusTree:
             self._insert_in_parent(node, new_node.keys[0], new_node)
 
     def _insert_in_parent(self, node, key, new_node):
+        """Inserts a key in the parent node after splitting.
+        :param node: The original node being split.
+        :param key: The smallest key in the new node created after split.
+        :param new_node: The new node created from splitting.
+        """
         parent = self._find_parent(self.root, node)
         if not parent:
             self.root = self.Node()
@@ -86,6 +120,11 @@ class BPlusTree:
             self._split(parent, True)
 
     def _find_parent(self, current, child):
+        """Finds the parent node of a given child node.
+        :param current: The current node to check for being the parent.
+        :param child: The child node whose parent is being searched.
+        :return: The parent node if found, otherwise None.
+        """
         if current.is_leaf or not current.children:
             return None
         for i, sub_node in enumerate(current.children):
@@ -98,10 +137,19 @@ class BPlusTree:
         return None
 
     def search(self, key):
+        """Searches for a key in the B+ tree.
+        :param key: The key to search for.
+        :return: True if the key is found, otherwise False.
+        """
         node = self._find_node(self.root, key)
         return key in node.keys
 
     def range_search(self, key_start, key_end):
+        """Performs a range search to find all keys within the specified range.
+        :param key_start: The start of the key range.
+        :param key_end: The end of the key range.
+        :return: A list of keys found within the range.
+        """
         if key_start > key_end:
             raise ValueError(f"key_start {key_start} must be less than or equal to key_end {key_end}")
 
@@ -124,6 +172,10 @@ class BPlusTree:
         return results
 
     def delete(self, key):
+        """Deletes a key from the B+ tree.
+        :param key: The key to delete.
+        :return: True if the key was successfully deleted, otherwise False.
+        """
         node = self._find_leaf(self.root, key)
         if key in node.keys:
             node.keys.remove(key)
@@ -237,6 +289,10 @@ class BPlusTree:
             return '\n'.join(result)
         
     def visualize(self, title = "", figsize = (10, 5)):
+        """Visualizes the B+ tree using a graph representation.
+        :param title: The title of the visualization.
+        :param figsize: Tuple indicating the figure size.
+        """
         plt.figure(figsize= figsize)
         G = nx.DiGraph()
         node_labels = {}
