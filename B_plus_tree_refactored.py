@@ -1,3 +1,6 @@
+import matplotlib.pyplot as plt
+import networkx as nx
+
 class BPlusTree:
     class Node:
         def __init__(self, is_leaf=False):
@@ -94,17 +97,29 @@ class BPlusTree:
         return key in node.keys
 
     def range_search(self, key_start, key_end):
+        if key_start > key_end:
+            raise ValueError(f"key_start {key_start} must be less than or equal to key_end {key_end}")
+
         results = []
-        node = self._find_node(self.root, key_start)
-        while node:
-            results.extend([key for key in node.keys if key_start <= key <= key_end])
-            if node.keys[-1] > key_end:
-                break
-            node = node.next
+        current_node = self._find_leaf(self.root, key_start)
+
+        # Make sure we start from a node that actually has keys to compare
+        while current_node and current_node.keys[-1] < key_start:
+            current_node = current_node.next
+
+        # Collect all keys within the range starting from the found leaf node
+        while current_node:
+            for key in current_node.keys:
+                if key_start <= key <= key_end:
+                    results.append(key)
+                elif key > key_end:
+                    return results
+            current_node = current_node.next  # Move to the next leaf node
+
         return results
 
     def delete(self, key):
-        node, _ = self._find_leaf(self.root, key)
+        node = self._find_leaf(self.root, key)
         if key in node.keys:
             node.keys.remove(key)
             if len(node.keys) < self.order // 2 and node != self.root:
@@ -171,16 +186,16 @@ class BPlusTree:
 
     def _find_leaf(self, node, key):
         """Helper function to find the leaf node containing the key and its parent."""
-        parent = None
         while not node.is_leaf:
-            parent = node
-            i = 0
-            while i < len(node.keys) and key >= node.keys[i]:
-                i += 1
-            if i == len(node.keys):  # If key is greater than all keys in the node
-                i -= 1  # Ensure we use the last available child
-            node = node.children[i]
-        return node, parent
+            found = False
+            for i in range(len(node.keys)):
+                if key < node.keys[i]:
+                    node = node.children[i]
+                    found = True
+                    break
+            if not found:
+                node = node.children[-1]  # Move to the right-most child if key is greater than all keys in the node
+        return node
     
     def display_tree(self, node=None, level=0):
         if node is None:
@@ -219,27 +234,24 @@ class BPlusTree:
     def visualize(self):
         G = nx.DiGraph()
         node_labels = {}
+        id_counter = [0]  # use a list to have a mutable integer
 
-        def add_nodes_edges(node, graph, node_id=0):
+        def add_nodes_edges(node, graph, node_id, level=0):
             """ Recursive helper function to add nodes and edges to the graph. """
-            if node.is_leaf:
-                node_label = f"Leaf: {node.keys}"
-            else:
-                node_label = f"Internal: {node.keys}"
-
-            graph.add_node(node_id, label=node_label)
+            node_label = f"{node.keys}"
+            graph.add_node(node_id, label=node_label, subset=level)
             node_labels[node_id] = node_label
 
             child_id = node_id + 1
             for child in node.children:
                 graph.add_edge(node_id, child_id)
-                child_id = add_nodes_edges(child, graph, child_id)
+                child_id = add_nodes_edges(child, graph, child_id, level + 1)
             return child_id
 
         # Start recursion from the root
-        add_nodes_edges(self.root, G)
+        add_nodes_edges(self.root, G, id_counter[0])
 
-        # Layout the graph
-        pos = nx.multipartite_layout(G, subset_key=lambda n: (n // 10) % 3)
+        # Layout the graph using multipartite layout
+        pos = nx.multipartite_layout(G, subset_key="subset")
         nx.draw(G, pos, labels=node_labels, with_labels=True, arrows=False)
         plt.show()
