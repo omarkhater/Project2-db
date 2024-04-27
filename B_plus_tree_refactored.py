@@ -57,6 +57,11 @@ class BPlusTree:
         node.keys = node.keys[:mid]
         node.children = node.children[:mid] if not node.is_leaf else []
 
+        # Handling leaf node specific operations
+        if node.is_leaf:
+            new_node.next = node.next
+            node.next = new_node
+
         if node == self.root:
             new_root = self.Node()
             new_root.keys = [new_node.keys[0]]
@@ -231,7 +236,8 @@ class BPlusTree:
         if level == 0:
             return '\n'.join(result)
         
-    def visualize(self):
+    def visualize(self, title = "", figsize = (10, 5)):
+        plt.figure(figsize= figsize)
         G = nx.DiGraph()
         node_labels = {}
         id_counter = [0]  # use a list to have a mutable integer
@@ -254,4 +260,22 @@ class BPlusTree:
         # Layout the graph using multipartite layout
         pos = nx.multipartite_layout(G, subset_key="subset")
         nx.draw(G, pos, labels=node_labels, with_labels=True, arrows=False)
+        plt.title(title)
         plt.show()
+
+    def verify_leaf_chain(self):
+        
+        # Start at the leftmost leaf node
+        node = self.root
+        while not node.is_leaf:
+            node = node.children[0]  # Navigate to the leftmost child until we hit a leaf
+        all_leaves = []
+        # Traverse the linked leaves and print their keys
+        while node:
+            all_leaves.extend(node.keys)
+            node = node.next
+        # Convert each key to string and join with '->'
+        all_leaves_as_strings = [str(key) for key in all_leaves]  # Convert each key to string
+        leaves_chain = " --> ".join(all_leaves_as_strings)  # Join all keys as strings with arrows between them
+        print("Leaf chain:")
+        print(leaves_chain)
