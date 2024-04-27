@@ -1,4 +1,4 @@
-Copyright (c) [2023] [Omar Khater]
+Copyright (c) [2024] [Omar Khater]
 
 All rights reserved.
 
