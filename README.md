@@ -17,8 +17,8 @@ This repository implements two critical data structures and algorithms used exte
 ## Installation
 Clone this repository and install required dependencies:
 ```bash
-git clone https://github.com/yourusername/your-repository.git
-cd your-repository
+git clone https://github.com/omarkhater/Project2-db.git
+cd Project2-db
 pip install -r requirements.txt
 ```
 
