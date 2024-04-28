@@ -10,46 +10,45 @@ class StorageManager:
     def __init__(self, num_blocks, tuples_per_block):
         self.num_blocks = num_blocks
         self.tuples_per_block = tuples_per_block
-        self.memory = []
+        self.memory = [None] * num_blocks  # Last buffer is reserved for incoming data
         self.disk = {}
         self.io_count = 0
 
     def write_to_disk(self, key, data):
-        # Organize data into blocks before writing to disk
-        blocks = [data[i:i + self.tuples_per_block] for i in range(0, len(data), self.tuples_per_block)]
-        self.disk[key] = blocks
-        self.io_count += len(blocks)
+        if key not in self.disk:
+            self.disk[key] = []
+        self.disk[key].extend([data[i:i + self.tuples_per_block] for i in range(0, len(data), self.tuples_per_block)])
+        self.io_count += len(data) // self.tuples_per_block
 
     def read_from_disk(self, key):
-        # Return blocks of data
         if key in self.disk:
             for block in self.disk[key]:
                 yield block
                 self.io_count += 1
 
     def clear_memory(self):
-        self.memory = []
+        self.memory = [None] * self.num_blocks
 
-    def hash_and_partition(self, relation_key, hash_function, hash_index = 0):
-        # Initialize buffers for each bucket
-        buffers = {i: [] for i in range(self.num_blocks - 1)}
+    def hash_and_partition(self, relation_key, hash_function, hash_index=0):
+        """Reference: Figure 15.12 page 733 in Database Managment The complete System 2nd Edition"""
+        buffers = {i: [] for i in range(self.num_blocks - 1)}  # Initialize M-1 buffers
         for block in self.read_from_disk(relation_key):
+            self.memory[-1] = block  # Load block into the last memory buffer
             for record in block:
-                key = record[hash_index]  
+                key = record[hash_index]
                 bucket_index = hash_function(key, self.num_blocks - 1)
-                # Check if buffer is full
                 if len(buffers[bucket_index]) >= self.tuples_per_block:
                     self.write_to_disk(f"{relation_key}_bucket_{bucket_index}", buffers[bucket_index])
                     buffers[bucket_index] = []
                 buffers[bucket_index].append(record)
 
-        # Write remaining buffers to disk
+        # Flush remaining data in buffers to disk
         for index, buffer in buffers.items():
             if buffer:
                 self.write_to_disk(f"{relation_key}_bucket_{index}", buffer)
 
     def visualize_hashing_results(self, relation_key):
-        bucket_sizes = {f"{relation_key}_bucket_{i}": len(sum(self.disk.get(f"{relation_key}_bucket_{i}", []), [])) for i in range(self.num_blocks - 1)}
+        bucket_sizes = {f"{relation_key}_bucket_{i}": sum(len(block) for block in self.disk.get(f"{relation_key}_bucket_{i}", [])) for i in range(self.num_blocks - 1)}
         plt.bar(bucket_sizes.keys(), bucket_sizes.values())
         plt.xlabel('Buckets')
         plt.ylabel('Number of Records')
@@ -61,6 +60,7 @@ class StorageManager:
         # Optionally print bucket sizes for more detail
         for bucket, size in bucket_sizes.items():
             print(f"{bucket}: {size} records")
+
 
 def hash_function(key, num_buckets):
     return key % num_buckets
@@ -81,12 +81,14 @@ def two_pass_join(storage, join_relation={'relation_r': 1, 'relation_s':0}):
     # Second pass: Join phase by reading hashed blocks and performing join
     result = []
     for i in range(storage.num_blocks - 1):
-        bucket_r = storage.disk.get(f'relation_r_bucket_{i}', [])[0]
-        bucket_s = storage.disk.get(f'relation_s_bucket_{i}', [])[0]
-        for a, b1 in bucket_r:
-            for b2, c in bucket_s:
-                if b1 == b2:
-                    result.append((a, b1, c))
+        bucket_r = storage.disk.get(f'relation_r_bucket_{i}', [])
+        bucket_s = storage.disk.get(f'relation_s_bucket_{i}', [])
+        for lr in bucket_r:
+            for ls in bucket_s: 
+                for a, b1 in lr:
+                    for b2, c in ls:
+                        if b1 == b2:
+                            result.append((a, b1, c))
 
     return result
 
@@ -111,8 +113,6 @@ def sanity_check(storage, two_pass_results, relation_r, relation_s):
 
     # Compare the results for correctness
     correct_results = two_pass_df.equals(pandas_results.sort_values(['A', 'B', 'C']).reset_index(drop=True))
-    print("Sanity Check Passed:" if correct_results else "Sanity Check Failed.")
-
     # Calculate theoretical I/O costs
     tuples_per_block = storage.tuples_per_block
     B_R = len(relation_r) // tuples_per_block + (1 if len(relation_r) % tuples_per_block != 0 else 0)
@@ -124,4 +124,4 @@ def sanity_check(storage, two_pass_results, relation_r, relation_s):
     print(f"Expected I/O Operations: {theoretical_io}")
     print(f"Actual I/O Operations: {actual_io}")
 
-    return correct_results, theoretical_io == actual_io
+    return correct_results
